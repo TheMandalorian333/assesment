@@ -1,0 +1,84 @@
+from pandas.core.indexes import category
+import re
+import json
+from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
+import requests
+import pandas as pd
+from datetime import datetime
+
+keyword = "Hospitals"
+directory = Path("hospitals")
+data_url = "https://data.cms.gov/provider-data/api/1/metastore/schemas/dataset/items"
+run_history = Path("last_run.json")
+
+
+def snake_converter(column):
+	column = column.strip()
+	column = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", column)
+	column = re.sub(r"[^a-zA-Z0-9]+", "-", column)
+	return column.strip("_").lower()
+
+
+
+
+def download_data(dt):
+	file_path = directory/f'{dt["name"]}.csv'
+
+	api_response = requests.get(dt["url"], timeout=60)
+	api_response.raise_for_status()
+
+	with open(file_path, "wb") as file:
+		file.write(api_response.content)
+
+	df = pd.read_csv(file_path)
+	df.columns = [snake_converter(column) for column in df.columns]
+	df.to_csv(file_path, index = False)
+
+	print(f"Downloaded: {file_path}")
+
+
+def main():
+	directory.mkdir(exist_ok=True)
+
+	last_run = None
+
+	if run_history.exists():
+		with open(run_history, "r") as history:
+			last_run = json.load(history)["last_run"]
+
+	response = requests.get(data_url, params={"q": keyword}, timeout=60)
+	response.raise_for_status()
+
+	datasets = []
+
+	for dataset in response.json():
+		theme = dataset.get("theme", "")
+	
+		search_text = f"{theme}".lower()
+		if keyword.lower() not in search_text:
+			continue
+
+		modified_data = dataset.get("metadata_mod")
+
+		if last_run and modified_data and modified_data <= last_run:
+			continue
+
+		dataset_id = dataset.get("identifier")
+		if not dataset_id:
+			continue
+			
+		datasets.append({
+			"name": dataset_id,
+			"url": f"{data_url}/{dataset_id}"
+		})
+
+	with ThreadPoolExecutor() as executor:
+		executor.map(download_data, datasets)
+
+	with open(run_history, "w") as file:
+		json.dump({"last_run": datetime.now().isoformat()}, file)
+
+
+if __name__ == "__main__":
+	main()
