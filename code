@@ -15,7 +15,7 @@ run_history = Path("last_run.json")
 
 def snake_converter(column):
 	column = column.strip()
-	column = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", column)
+	column = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", column) # I Had to look up ([a-z0-9])([A-Z])", r"\1_\2" because I always forget the syntax for this
 	column = re.sub(r"[^a-zA-Z0-9]+", "-", column)
 	return column.strip("_").lower()
 
@@ -73,7 +73,7 @@ def main():
 			"url": f"{data_url}/{dataset_id}"
 		})
 
-	with ThreadPoolExecutor() as executor:
+	with ThreadPoolExecutor() as executor: # I asked AI about running in parallel because I have not done that in python before.
 		executor.map(download_data, datasets)
 
 	with open(run_history, "w") as file:
@@ -82,3 +82,7 @@ def main():
 
 if __name__ == "__main__":
 	main()
+
+
+# Also, I did not code anything that has it run everyday, I would normally create a task in task scheduler to have it run daily.
+# I also asked AI to fix some runtime errors. Most where syntax errors. Nothing that drastically changed the code.
